@@ -1094,5 +1094,25 @@ render();
   }
 })();
 </script>
+  <button id="exp" style="position:fixed;bottom:12px;right:12px;z-index:9999;padding:10px 14px;border:0;border-radius:8px;background:#e07b39;color:#fff;font-size:14px">Export</button>
+<script>
+document.getElementById('exp').onclick = async () => {
+  const dump = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    dump[k] = localStorage.getItem(k);
+  }
+  const text = JSON.stringify(dump);
+  const file = new File([text], 'bts-export.json', {type: 'application/json'});
+  try {
+    if (navigator.canShare && navigator.canShare({files: [file]})) {
+      await navigator.share({files: [file], title: 'BTS export'});
+      return;
+    }
+  } catch (e) {}
+  try { await navigator.clipboard.writeText(text); alert('Copied to clipboard'); }
+  catch (e) { prompt('Copy this:', text); }
+};
+</script>
 </body>
 </html>
