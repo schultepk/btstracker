@@ -692,11 +692,28 @@ function renderPrograms(){
       <div class="dimmer">${nW} week${nW>1?'s':''} · ${days.map(esc).join(', ')} · ${logged} workouts logged</div></div>
       ${p.id===db.prefs.activeProgram?'<span class="badge" style="margin:0">Active</span>':`<button class="btn sm" onclick="setActive('${esc(p.id)}');renderPrograms()">Use</button>`}</div>
       <div class="row" style="margin-top:10px;flex-wrap:wrap"><button class="btn sm" onclick="viewProgram('${esc(p.id)}')">View</button>
-      <button class="btn sm" onclick="renameProgram('${esc(p.id)}')">Rename</button><button class="btn sm danger" onclick="deleteProgram('${esc(p.id)}')">Delete</button></div></div>`}).join('')||'<div class="empty">No programs yet.</div>';
+      <button class="btn sm" onclick="editSchedule('${esc(p.id)}')">Schedule</button><button class="btn sm" onclick="renameProgram('${esc(p.id)}')">Rename</button><button class="btn sm danger" onclick="deleteProgram('${esc(p.id)}')">Delete</button></div></div>`}).join('')||'<div class="empty">No programs yet.</div>';
 }
 function programTable(weeks,limitWeeks){return weeks.slice(0,limitWeeks||weeks.length).map(w=>`<h3 style="margin-top:12px">Week ${w.week}${w.label?' · '+esc(w.label):''}</h3>`+w.days.map(d=>`<div class="dimmer" style="margin-top:6px;font-weight:700">${esc(d.label)} <span style="font-weight:400">(${esc(d.key)})</span></div>
   <table class="pt"><tr><th>Exercise</th><th>Sets</th><th>Reps</th><th>Technique</th></tr>${d.exercises.map(e=>`<tr><td>${esc(e.name)}</td><td>${e.sets}</td><td>${esc(e.reps)}</td><td>${esc(e.technique)}</td></tr>`).join('')}</table>`).join('')).join('')}
 function viewProgram(id){const p=db.programs[id];openModal(esc(p.name),programTable(p.weeks))}
+/* ---- schedule: week 1 start date + weekday for each day -> fills missing workout dates ---- */
+const WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function schedDate(p,w,d){const sc=p.schedule;if(!sc||!sc.start||sc.days?.[d]==null)return'';
+  const s=new Date(sc.start+'T12:00:00');const off=((sc.days[d]-s.getDay())+7)%7;s.setDate(s.getDate()+(w-1)*7+off);
+  return`${s.getFullYear()}-${pad(s.getMonth()+1)}-${pad(s.getDate())}`}
+function fillDates(pid){const p=db.programs[pid];if(!p?.schedule)return 0;let n=0;
+  for(const [k,wo] of Object.entries(db.workouts)){const[id,w,d]=k.split('|');if(id!==pid||wo.date||!woHasData(wo))continue;
+    const dt=schedDate(p,+w,d);if(dt){db.workouts[k]={...wo,date:dt,updatedAt:now()};n++}}
+  if(n)changed();return n}
+function editSchedule(id){const p=db.programs[id],sc=p.schedule||{start:'',days:{}},keys=[...new Set(p.weeks.flatMap(w=>w.days.map(d=>d.key)))];
+  openModal('Schedule · '+esc(p.name),`<div class="muted">Week 1 start date and the weekday each day is trained. Used to fill in dates for logged workouts that don't have one.</div>
+   <label class="f">Week 1 starts</label><input type="date" id="scStart" value="${esc(sc.start||'')}">
+   ${keys.map(k=>`<label class="f">${esc(k)}</label><select data-k="${esc(k)}" class="scDay"><option value="">Not scheduled</option>${WD.map((n,i)=>`<option value="${i}"${sc.days?.[k]==i&&sc.days?.[k]!==''?' selected':''}>${n}</option>`).join('')}</select>`).join('')}
+   <button class="btn primary" style="width:100%;margin-top:14px" onclick="saveSchedule('${esc(id)}')">Save &amp; fill missing dates</button>`)}
+function saveSchedule(id){const days={};document.querySelectorAll('.scDay').forEach(s=>{if(s.value!=='')days[s.dataset.k]=+s.value});
+  db.programs[id]={...db.programs[id],schedule:{start:$('scStart').value,days},updatedAt:now()};changed();
+  const n=fillDates(id);closeModal();renderAll();toast(n?`Filled dates for ${n} workouts`:'Schedule saved (no undated workouts)')}
 function renameProgram(id){const n=prompt('Program name',db.programs[id].name);if(!n)return;db.programs[id]={...db.programs[id],name:n.trim(),updatedAt:now()};changed();renderPrograms()}
 function deleteProgram(id){const logged=Object.keys(db.workouts).filter(k=>k.startsWith(id+'|')&&woHasData(db.workouts[k])).length;
   if(logged)return alert(`This program has ${logged} logged workouts in your history. It can't be deleted, but you can switch to another program.`);
@@ -809,6 +826,9 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 // boot
 if(!lsGet('hub.migrated',false))migrateOld(false);
 if(!lsGet('hub.mmMigrated',false))migrateMinMax(false);
+// one-time: BTS schedule (Week 1 = Sun Sept 6, 2026; Upper Sun, Lower Mon, Pull Wed, Push Thu, Legs Fri)
+if(db.programs.bts&&!db.programs.bts.schedule){db.programs.bts={...db.programs.bts,schedule:{start:'2026-09-06',days:{Upper:0,Lower:1,Pull:3,Push:4,Legs:5}},updatedAt:now()};changed()}
+for(const pid in db.programs){const n=fillDates(pid);if(n)setTimeout(()=>toast(`Filled dates for ${n} workouts from the program schedule`),800)}
 go(ui.view||'train');status();
 if(gh)sync.run();
 </script>
