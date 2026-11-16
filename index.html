@@ -984,55 +984,38 @@ function copyText() {
 // ─────────────────────────────────────────────────────────────────────────────
 function showProgress() {
   const day = state.currentDay;
-  const exercises = getExercises(1, day); // use block 1 names as reference
   const cont = document.getElementById('progressContent');
-
-  let html = `<div style="margin-bottom:8px;font-size:13px;color:var(--text-dim)">Showing progress for <strong style="color:var(--text)">${DAY_LABELS[day]}</strong> across all weeks.</div>`;
-
-  exercises.forEach((ex, ei) => {
+  const slots = getExercises(1, day).length;
+  let html = `<div style="margin-bottom:8px;font-size:13px;color:var(--text-dim)">Progress for <strong style="color:var(--text)">${DAY_LABELS[day]}</strong></div>`;
+  for (let ei = 0; ei < slots; ei++) {
     let rows = '';
     for (let w = 1; w <= 12; w++) {
-      const blockEx = getExercises(w, day);
-      const thisEx = blockEx[ei];
-      if (!thisEx) continue;
       const saved = loadWorkout(w, day);
       if (!saved) continue;
       const exSets = saved.sets?.[ei] || {};
-      const hasData2 = Object.values(exSets).some(s => s?.weight || s?.reps);
-      if (!hasData2) continue;
+      if (!Object.values(exSets).some(s => s?.weight || s?.reps)) continue;
+      const eff = getEffectiveExercise(w, day, ei);
       const setStrs = [];
       for (let s = 0; s < 4; s++) {
         const sv = exSets[s];
         if (sv?.weight || sv?.reps) {
-          const isLastSet = !exSets[s + 1]?.weight && !exSets[s + 1]?.reps;
-          const llpReps = isLastSet && exSets['llp']?.reps;
-          setStrs.push(llpReps ? `${sv.weight||'?'}×${sv.reps||'?'}+${llpReps}` : `${sv.weight||'?'}×${sv.reps||'?'}`);
+          const last = !exSets[s+1]?.weight && !exSets[s+1]?.reps;
+          const llp = last && exSets['llp']?.reps;
+          setStrs.push(`${sv.weight||'?'}×${sv.reps||'?'}${llp ? '+'+llp : ''}`);
         }
       }
-      const dateStr = saved.date ? new Date(saved.date + 'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric' }) : '';
-      rows += `<tr>
-        <td><span class="prog-week-badge">W${w}</span></td>
-        <td><span class="prog-entry">${setStrs.join(' / ')}</span></td>
-        <td><span class="prog-entry">${dateStr}</span></td>
-      </tr>`;
+      const dateStr = saved.date ? new Date(saved.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
+      rows += `<tr><td><span class="prog-week-badge">W${w}</span></td>
+        <td><div class="prog-entry" style="color:var(--text)">${eff.name}</div><div class="prog-entry">${setStrs.join(' / ')}</div></td>
+        <td><span class="prog-entry">${dateStr}</span></td></tr>`;
     }
-    if (rows) {
-      html += `<div style="margin-bottom:16px">
-        <div class="prog-ex-name" style="font-size:13px;font-weight:700;margin-bottom:6px;color:var(--accent)">${ex.name}</div>
-        <div class="prog-table-wrap"><table class="prog-table">
-          <tr><th>Week</th><th>Sets (w×r)</th><th>Date</th></tr>
-          ${rows}
-        </table></div>
-      </div>`;
-    }
-  });
-
-  if (!html.includes('<table')) {
-    html += '<div class="empty-state"><div class="empty-state-icon">📊</div><div>No data logged for this day yet.</div></div>';
+    if (rows) html += `<div style="margin-bottom:16px"><div style="font-size:13px;font-weight:700;margin-bottom:6px;color:var(--accent)">Slot ${ei+1}</div>
+      <div class="prog-table-wrap"><table class="prog-table"><tr><th>Week</th><th>Exercise / Sets</th><th>Date</th></tr>${rows}</table></div></div>`;
   }
-
+  if (!html.includes('<table')) html += '<div class="empty-state">No data logged yet.</div>';
   cont.innerHTML = html;
   openModal('progressModal');
+}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
